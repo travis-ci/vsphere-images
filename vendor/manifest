@@ -18,6 +18,14 @@
 			"notests": true
 		},
 		{
+			"importpath": "github.com/vmware/govmomi",
+			"repository": "https://github.com/vmware/govmomi",
+			"vcs": "git",
+			"revision": "45a5351755f12668ca9a0b63f1d1c906431157f6",
+			"branch": "master",
+			"notests": true
+		},
+		{
 			"importpath": "gopkg.in/urfave/cli.v1",
 			"repository": "https://gopkg.in/urfave/cli.v1",
 			"vcs": "git",
