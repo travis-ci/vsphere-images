@@ -2,166 +2,96 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/url"
-	"os"
 	"path"
 
 	"github.com/pkg/errors"
+	vsphereimages "github.com/travis-ci/vsphere-images"
 	"github.com/urfave/cli"
-	"github.com/vmware/govmomi"
-	"github.com/vmware/govmomi/object"
-	"github.com/vmware/govmomi/vim25/types"
 )
 
 var copyImageCommand = cli.Command{
 	Name:      "copy-image",
 	Usage:     "copy image from one vCenter to another",
-	ArgsUsage: "image-name",
+	ArgsUsage: "src-image-name dest-image-name",
 	Action:    copyImageAction,
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:   "src",
+			Name:   "src-url",
 			Usage:  "URL to the source vCenter",
 			EnvVar: "VSPHERE_IMAGES_SRC_URL",
 		},
 		cli.StringFlag{
-			Name:   "dest",
+			Name:   "dest-url",
 			Usage:  "URL to the destination vCenter",
 			EnvVar: "VSPHERE_IMAGES_DEST_URL",
 		},
-		cli.StringFlag{
-			Name:   "dest-vcenter-shortname",
-			Usage:  "Short name for destination vCenter to use in paths",
-			EnvVar: "VSPHERE_IMAGES_DEST_VCENTER_SHORTNAME",
+		cli.BoolFlag{
+			Name:   "src-insecure-skip-verify",
+			Usage:  "Whether the source vCenter's certificate chain and hostname should be verified",
+			EnvVar: "VSPHERE_IMAGES_SRC_INSECURE_SKIP_VERIFY",
+		},
+		cli.BoolFlag{
+			Name:   "dest-insecure-skip-verify",
+			Usage:  "Whether the destination vCenter's certificate chain and hostname should be verified",
+			EnvVar: "VSPHERE_IMAGES_DEST_INSECURE_SKIP_VERIFY",
 		},
 		cli.StringFlag{
-			Name:   "src-temp-folder",
-			Usage:  "Inventory folder in the source vCenter to use for temporary storage",
-			EnvVar: "VSPHERE_IMAGES_SRC_TEMP_FOLDER",
+			Name:   "dest-sha1-fingerprint",
+			Usage:  "The SHA-1 fingerprint of the TLS certificate on the destination vCenter. Format should be :-separated hexadecimal numbers. Leave empty in order to compute the fingerprint on this machine.",
+			EnvVar: "VSPHERE_IMAGES_DEST_SHA1_FINGERPRINT",
 		},
 		cli.StringFlag{
-			Name:   "dest-vcenter-ssl-thumbprint",
-			Usage:  "The :-separated SHA1 SSL fingerprint for the destination vCenter",
-			EnvVar: "VSPHERE_IMAGES_DEST_VCENTER_SSL_THUMBPRINT",
+			Name:   "dest-datastore-path",
+			Usage:  "The inventory path to the datastore to put the VM in in the destination vCenter",
+			EnvVar: "VSPHERE_IMAGES_DEST_DATASTORE_PATH",
+		},
+		cli.StringFlag{
+			Name:   "dest-pool-path",
+			Usage:  "The inventory path to the resource pool to put the VM in in the destination vCenter",
+			EnvVar: "VSPHERE_IMAGES_DEST_POOL_PATH",
+		},
+		cli.StringFlag{
+			Name:   "dest-host-path",
+			Usage:  "The inventory path to the host to put the VM in in the destination vCenter",
+			EnvVar: "VSPHERE_IMAGES_DEST_HOST_PATH",
 		},
 	},
 }
 
 func copyImageAction(c *cli.Context) error {
-	srcStringURL := c.String("src")
-	destStringURL := c.String("dest")
+	srcStringURL := c.String("src-url")
+	destStringURL := c.String("dest-url")
 
 	srcURL, err := url.Parse(srcStringURL)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "couldn't parse source URL: %v\n", err)
-		os.Exit(1)
+		return errors.Wrap(err, "parsing source URL failed")
 	}
 	destURL, err := url.Parse(destStringURL)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "couldn't parse destination URL: %v\n", err)
-		os.Exit(1)
+		return errors.Wrap(err, "parsing destination URL failed")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	srcClient, err := govmomi.NewClient(ctx, srcURL, true)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "couldn't create source vSphere client: %v\n", err)
-		os.Exit(1)
+	source := vsphereimages.ImageSource{
+		VSphereEndpoint:           srcURL,
+		VSphereInsecureSkipVerify: c.Bool("src-insecure-skip-verify"),
+		VMPath: c.Args().Get(0),
 	}
 
-	_, err = govmomi.NewClient(ctx, destURL, true)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "couldn't create destination vSphere client: %v\n", err)
-		os.Exit(1)
+	destination := vsphereimages.ImageDestination{
+		VSphereEndpoint:           destURL,
+		VSphereInsecureSkipVerify: c.Bool("dest-insecure-skip-verify"),
+		VSphereSHA1Fingerprint:    c.String("dest-sha1-fingerprint"),
+		FolderPath:                path.Dir(c.Args().Get(1)),
+		DatastorePath:             c.String("dest-datastore-path"),
+		ResourcePoolPath:          c.String("dest-pool-path"),
+		HostPath:                  c.String("dest-host-path"),
+		VMName:                    path.Base(c.Args().Get(1)),
 	}
 
-	name := fmt.Sprintf("%s_%s", c.String("dest-vcenter-shortname"), path.Base(c.Args().First()))
-
-	_, err = cloneVM(ctx, srcClient, c.Args().First(), c.String("src-temp-folder"), name)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error cloning VM: %v\n", err)
-		os.Exit(1)
-	}
-
-	//  unregister_vm
-	//
-	//  export GOVC_URL="${BASE_VM_DST_VCENTER}"
-	//  # move the $Base_VM into a folder for $vCenter02 inside the datastore
-	//  move_vm_in_datastore
-	//
-	//  # register the $Base_VM in $vCenter02
-	//  register_vm_in_vcenter "${BASE_VM_DST_DATASTORE}"
-	//
-	//  # update network card
-	//  update_network "${BASE_VM_DST_FOLDER}/${BASE_VM_NAME}" "${BASE_VM_NETWORK}"
-	//
-	//  # this will remove any existing snapshots and make a new `base`
-	//  base_snapshot "${BASE_VM_DST_FOLDER}/${BASE_VM_NAME}"
-
-	return nil
-}
-
-func cloneVM(ctx context.Context, srcClient *govmomi.Client, baseVMPath, srcTempFolder, name string) (*object.VirtualMachine, error) {
-	// Find the base VM
-	vm, err := findVM(ctx, srcClient, baseVMPath)
-	if err != nil {
-		return nil, errors.Wrap(err, "couldn't find base VM")
-	}
-
-	searchIndex := object.NewSearchIndex(srcClient.Client)
-	folderRef, err := searchIndex.FindByInventoryPath(ctx, srcTempFolder)
-	if err != nil {
-		return nil, errors.Wrap(err, "error searching for src temp folder")
-	}
-	if folderRef == nil {
-		return nil, errors.Errorf("src temp folder not found: %s", srcTempFolder)
-	}
-	folder, ok := folderRef.(*object.Folder)
-	if !ok {
-		return nil, errors.Errorf("src temp folder is not a folder but a %T", folderRef)
-	}
-
-	cloneSpec := types.VirtualMachineCloneSpec{}
-
-	cloneTask, err := vm.Clone(ctx, folder, name, cloneSpec)
-	if err != nil {
-		return nil, errors.Wrap(err, "couldn't clone VM")
-	}
-
-	info, err := cloneTask.WaitForResult(ctx, nil)
-	if err != nil {
-		return nil, errors.Wrap(err, "error cloning VM")
-	}
-
-	return object.NewVirtualMachine(srcClient.Client, info.Result.(types.ManagedObjectReference)), nil
-}
-
-func findVM(ctx context.Context, client *govmomi.Client, path string) (*object.VirtualMachine, error) {
-	searchIndex := object.NewSearchIndex(client.Client)
-	vmRef, err := searchIndex.FindByInventoryPath(ctx, path)
-	if err != nil {
-		return nil, errors.Wrap(err, "error searching for VM")
-	}
-	if vmRef == nil {
-		return nil, errors.Wrap(err, "couldn't find VM")
-	}
-
-	vm, ok := vmRef.(*object.VirtualMachine)
-	if !ok {
-		return nil, errors.Errorf("VM is not a VM but a %T", vmRef)
-	}
-
-	return vm, nil
-}
-
-func unregisterVM(ctx context.Context, client *govmomi.Client, path string) error {
-	vm, err := findVM(ctx, client, path)
-	if err != nil {
-		return errors.Wrap(err, "couldn't find VM to unregister")
-	}
-
-	return errors.Wrap(vm.Unregister(ctx), "couldn't unregister VM")
+	err = vsphereimages.CopyImage(ctx, source, destination)
+	return errors.Wrap(err, "copying image failed")
 }
