@@ -34,19 +34,19 @@ clean:
 .PHONY: test
 test:
 	for package in $(TEST_PACKAGES); do \
-		go test -x -v \
+		go test $(GOBUILDFLAGS) -v \
 			$${package}; \
 	done
 
 .PHONY: build
 build: deps
-	go install -x -ldflags "$(GOBUILD_LDFLAGS)" $(MAIN_PACKAGE)
+	go install $(GOBUILDFLAGS) -ldflags "$(GOBUILD_LDFLAGS)" $(MAIN_PACKAGE)
 
 .PHONY: crossbuild
 crossbuild: deps
-	GOARCH=amd64 GOOS=darwin go build -o build/darwin/amd64/vsphere-images \
+	GOARCH=amd64 GOOS=darwin go build $(GOBUILDFLAGS) -o build/darwin/amd64/vsphere-images \
 		-ldflags "$(GOBUILD_LDFLAGS)" $(MAIN_PACKAGE)
-	GOARCH=amd64 GOOS=linux go build -o build/linux/amd64/vsphere-images \
+	GOARCH=amd64 GOOS=linux go build $(GOBUILDFLAGS) -o build/linux/amd64/vsphere-images \
 		-ldflags "$(GOBUILD_LDFLAGS)" $(MAIN_PACKAGE)
 
 .PHONY: distclean
