@@ -62,6 +62,11 @@ var copyImageCommand = cli.Command{
 			Usage:  "The inventory path to the host to put the VM in in the destination vCenter",
 			EnvVar: "VSPHERE_IMAGES_DEST_HOST_PATH",
 		},
+		cli.StringFlag{
+			Name:   "dest-network-name",
+			Usage:  "The name of the network to connect the copied VM to.",
+			EnvVar: "VSPHERE_IMAGES_DEST_NETWORK_NAME",
+		},
 	},
 }
 
@@ -96,6 +101,7 @@ func copyImageAction(c *cli.Context) error {
 		ResourcePoolPath:          c.String("dest-pool-path"),
 		HostPath:                  c.String("dest-host-path"),
 		VMName:                    path.Base(c.Args().Get(1)),
+		NetworkPath:               c.String("dest-network-name"),
 	}
 
 	logger := newProgressLogger()

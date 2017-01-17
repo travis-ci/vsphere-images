@@ -74,6 +74,11 @@ type ImageDestination struct {
 	// `/your-datacenter/host/pool-name/host-name`.
 	HostPath string
 
+	// NetworkPath is the inventory path to the network (dvSwitch, dvPortGroup,
+	// etc.) to connect the copied VM to. Network inventory paths usually look
+	// something like `/your-datacenter/network/name-of-portgroup`.
+	NetworkPath string
+
 	// VMName is the name to give to the destination VM.
 	VMName string
 }
@@ -121,6 +126,29 @@ func CopyImage(ctx context.Context, source ImageSource, destination ImageDestina
 	}
 	destHostRef := destHost.Reference()
 
+	destNetwork, err := destFinder.Network(ctx, destination.NetworkPath)
+	if err != nil {
+		return errors.Wrap(err, "finding the destination network failed")
+	}
+
+	backing, err := destNetwork.EthernetCardBackingInfo(ctx)
+	if err != nil {
+		return errors.Wrap(err, "getting backing info for destination network failed")
+	}
+
+	devices, err := srcVM.Device(ctx)
+	if err != nil {
+		return errors.Wrap(err, "getting a list of devices on the source VM failed")
+	}
+
+	netDev := devices.Find("ethernet-0")
+	if netDev == nil {
+		return errors.New("no device with the name 'ethernet-0' was found on the source VM")
+	}
+
+	virtualEthernetCard := netDev.(types.BaseVirtualEthernetCard).GetVirtualEthernetCard()
+	virtualEthernetCard.Backing = backing
+
 	if destination.VSphereSHA1Fingerprint == "" {
 		hostPort := destination.VSphereEndpoint.Host
 		if !hasPort(hostPort) {
@@ -157,6 +185,12 @@ func CopyImage(ctx context.Context, source ImageSource, destination ImageDestina
 			Datastore: &destDatastoreRef,
 			Pool:      &destPoolRef,
 			Host:      &destHostRef,
+			DeviceChange: []types.BaseVirtualDeviceConfigSpec{
+				&types.VirtualDeviceConfigSpec{
+					Operation: types.VirtualDeviceConfigSpecOperationEdit,
+					Device:    virtualEthernetCard,
+				},
+			},
 		},
 	}
 
