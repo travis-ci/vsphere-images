@@ -24,5 +24,5 @@ func ExampleCopyImage() {
 		VMName:           "foo",
 	}
 
-	vsphereimages.CopyImage(context.TODO(), source, destination)
+	vsphereimages.CopyImage(context.TODO(), source, destination, nil)
 }
