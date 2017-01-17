@@ -1,6 +1,6 @@
 ROOT_PACKAGE := github.com/travis-ci/vsphere-images
 MAIN_PACKAGE := $(ROOT_PACKAGE)/cmd/vsphere-images
-TEST_PACKAGE := $(ROOT_PACKAGE)
+TEST_PACKAGES := $(ROOT_PACKAGE) $(MAIN_PACKAGE)
 COVER_PACKAGES := $(ROOT_PACKAGE),$(MAIN_PACKAGE)
 
 VERSION_VAR := main.VersionString
