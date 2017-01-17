@@ -11,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
+	"github.com/vmware/govmomi/vim25/progress"
 	"github.com/vmware/govmomi/vim25/types"
 )
 
@@ -77,7 +78,7 @@ type ImageDestination struct {
 	VMName string
 }
 
-func CopyImage(ctx context.Context, source ImageSource, destination ImageDestination) error {
+func CopyImage(ctx context.Context, source ImageSource, destination ImageDestination, s progress.Sinker) error {
 	srcClient, err := govmomi.NewClient(ctx, source.VSphereEndpoint, source.VSphereInsecureSkipVerify)
 	if err != nil {
 		return errors.Wrap(err, "creating source vSphere client failed")
@@ -164,7 +165,8 @@ func CopyImage(ctx context.Context, source ImageSource, destination ImageDestina
 		return errors.Wrap(err, "creating VM clone task failed")
 	}
 
-	return errors.Wrap(cloneTask.Wait(ctx), "cloning VM failed")
+	_, err = cloneTask.WaitForResult(ctx, s)
+	return errors.Wrap(err, "cloning VM failed")
 }
 
 func findSHA1Fingerprint(hostport string) (string, error) {
