@@ -16,6 +16,7 @@ func main() {
 
 	app.Commands = []cli.Command{
 		copyImageCommand,
+		resnapshotCommand,
 	}
 
 	err := app.Run(os.Args)
