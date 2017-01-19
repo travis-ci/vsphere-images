@@ -83,8 +83,7 @@ func copyImageAction(c *cli.Context) error {
 		return errors.Wrap(err, "parsing destination URL failed")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := context.Background()
 
 	source := vsphereimages.ImageSource{
 		VSphereEndpoint:           srcURL,
