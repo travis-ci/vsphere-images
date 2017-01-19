@@ -103,25 +103,28 @@ func copyImageAction(c *cli.Context) error {
 		NetworkPath:               c.String("dest-network-name"),
 	}
 
-	logger := newProgressLogger()
+	logger := newProgressLogger("Copying image… ")
 	err = vsphereimages.CopyImage(ctx, source, destination, logger)
 	if err != nil {
 		return errors.Wrap(err, "copying image failed")
 	}
-
 	logger.Wait()
+
 	return nil
 }
 
 type progressLogger struct {
-	wg sync.WaitGroup
+	prefix string
+	wg     sync.WaitGroup
 
 	sink chan chan progress.Report
 	done chan struct{}
 }
 
-func newProgressLogger() *progressLogger {
+func newProgressLogger(prefix string) *progressLogger {
 	p := &progressLogger{
+		prefix: prefix,
+
 		sink: make(chan chan progress.Report),
 		done: make(chan struct{}),
 	}
@@ -145,18 +148,22 @@ func (p *progressLogger) loopA() {
 		select {
 		case ch := <-p.sink:
 			err = p.loopB(tick, ch)
-			stop = true
+			if err != nil {
+				stop = true
+			}
 		case <-p.done:
 			stop = true
 		case <-tick.C:
-			fmt.Fprintf(os.Stderr, "\rcopying image… ")
+			fmt.Fprintf(os.Stderr, "\r%s      ", p.prefix)
 		}
 	}
 
 	if err != nil && err != io.EOF {
-		fmt.Fprintf(os.Stderr, "\rcopying image… Error: %s\n", err)
+		fmt.Fprintf(os.Stderr, "\r%s      ", p.prefix)
+		fmt.Fprintf(os.Stderr, "\r%sError: %s\n", p.prefix, err)
 	} else {
-		fmt.Fprintf(os.Stderr, "\rcopying image… OK\n")
+		fmt.Fprintf(os.Stderr, "\r%s      ", p.prefix)
+		fmt.Fprintf(os.Stderr, "\r%sOK\n", p.prefix)
 	}
 }
 
@@ -173,7 +180,7 @@ func (p *progressLogger) loopB(tick *time.Ticker, ch <-chan progress.Report) err
 			}
 			err = r.Error()
 		case <-tick.C:
-			line := "\rcopying image… "
+			line := "\r" + p.prefix
 			if r != nil {
 				line += fmt.Sprintf("(%.0f%%", r.Percentage())
 				detail := r.Detail()
