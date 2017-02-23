@@ -14,7 +14,7 @@ GENERATED_VALUE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%S%z')
 COPYRIGHT_VAR := main.CopyrightString
 COPYRIGHT_VALUE ?= $(shell grep -i ^copyright LICENSE | sed 's/^[Cc]opyright //')
 
-GOPATH := $(shell echo $${GOPATH%%:*})
+GOPATH := $(shell go env GOPATH)
 GOBUILD_LDFLAGS ?= \
     -X '$(VERSION_VAR)=$(VERSION_VALUE)' \
     -X '$(REV_VAR)=$(REV_VALUE)' \
