@@ -1,0 +1,8 @@
+language: go
+go: 1.8
+install:
+- make prereqs
+- make deps
+script:
+- make build
+- make test
