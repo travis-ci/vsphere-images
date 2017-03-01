@@ -13,6 +13,7 @@ $ vphere-images copy-image \
 	--dest-datastore-path=/Datacenter-2/datastore/DS-1 \
 	--dest-pool-path=/Datacenter-2/host/main_pool \
 	--dest-host-path=/Datacenter-2/host/main_pool/host01 \
+	--dest-network-name=/Datacenter-2/network/PortGroupName \
 	"/Datacenter-1/vm/base/foobar" \
 	"/Datacenter-2/vm/base/foobar"
 ```
