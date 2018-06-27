@@ -51,3 +51,25 @@ func MoveImage(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureSki
 	_, err = task.WaitForResult(ctx, s)
 	return errors.Wrap(err, "moving the VM failed")
 }
+
+func ConfigureImage(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureSkipVerify bool, imageInventoryPath string, config types.VirtualMachineConfigSpec, s progress.Sinker) error {
+	client, err := govmomi.NewClient(ctx, vSphereEndpoint, vSphereInsecureSkipVerify)
+	if err != nil {
+		return errors.Wrap(err, "creating vSphere client failed")
+	}
+
+	finder := find.NewFinder(client.Client, false)
+
+	vm, err := finder.VirtualMachine(ctx, imageInventoryPath)
+	if err != nil {
+		return errors.Wrap(err, "finding the VM failed")
+	}
+
+	task, err := vm.Reconfigure(ctx, config)
+	if err != nil {
+		return errors.Wrap(err, "creating the VM config task failed")
+	}
+
+	_, err = task.WaitForResult(ctx, s)
+	return errors.Wrap(err, "reconfiguring the VM failed")
+}
