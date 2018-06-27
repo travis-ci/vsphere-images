@@ -16,6 +16,7 @@ func main() {
 
 	app.Commands = []cli.Command{
 		copyImageCommand,
+		moveImageCommand,
 		resnapshotCommand,
 		datastoreMoveCommand,
 	}
