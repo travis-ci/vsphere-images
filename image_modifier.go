@@ -73,3 +73,30 @@ func ConfigureImage(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecu
 	_, err = task.WaitForResult(ctx, s)
 	return errors.Wrap(err, "reconfiguring the VM failed")
 }
+
+func MigrateImage(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureSkipVerify bool, imageInventoryPath string, poolInventoryPath string, s progress.Sinker) error {
+	client, err := govmomi.NewClient(ctx, vSphereEndpoint, vSphereInsecureSkipVerify)
+	if err != nil {
+		return errors.Wrap(err, "creating vSphere client failed")
+	}
+
+	finder := find.NewFinder(client.Client, false)
+
+	vm, err := finder.VirtualMachine(ctx, imageInventoryPath)
+	if err != nil {
+		return errors.Wrap(err, "finding the VM failed")
+	}
+
+	pool, err := finder.ResourcePool(ctx, poolInventoryPath)
+	if err != nil {
+		return errors.Wrap(err, "finding the resource pool failed")
+	}
+
+	task, err := vm.Migrate(ctx, pool, nil, types.VirtualMachineMovePriorityDefaultPriority, types.VirtualMachinePowerStatePoweredOff)
+	if err != nil {
+		return errors.Wrap(err, "creating the migrate task failed")
+	}
+
+	_, err = task.WaitForResult(ctx, s)
+	return errors.Wrap(err, "migrating the VM failed")
+}

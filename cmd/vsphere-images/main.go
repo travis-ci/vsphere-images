@@ -18,6 +18,7 @@ func main() {
 		copyImageCommand,
 		moveImageCommand,
 		configureImageCommand,
+		migrateImageCommand,
 		resnapshotCommand,
 		datastoreMoveCommand,
 	}
