@@ -1,0 +1,77 @@
+package vsphereimages
+
+import (
+	"context"
+	"net/url"
+	"regexp"
+
+	"github.com/pkg/errors"
+	"github.com/vmware/govmomi"
+	"github.com/vmware/govmomi/find"
+	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/vim25/progress"
+)
+
+func CheckOutHost(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureSkipVerify bool, clusterInventoryPath string, s progress.Sinker) (*object.HostSystem, error) {
+	client, err := govmomi.NewClient(ctx, vSphereEndpoint, vSphereInsecureSkipVerify)
+	if err != nil {
+		return nil, errors.Wrap(err, "creating vSphere client failed")
+	}
+
+	finder := find.NewFinder(client.Client, false)
+
+	hosts, err := finder.HostSystemList(ctx, clusterInventoryPath)
+	if err != nil {
+		return nil, errors.Wrap(err, "finding hosts for cluster failed")
+	}
+
+	if len(hosts) < 1 {
+		return nil, errors.New("no hosts found in cluster")
+	}
+
+	var chosenHost *object.HostSystem
+	for _, host := range hosts {
+		canCheckOut, err := canCheckOutHost(ctx, host, finder)
+		if canCheckOut {
+			chosenHost = host
+		}
+
+		if err != nil {
+			return nil, errors.Wrap(err, "failed determining if host could be checked out")
+		}
+	}
+
+	task, err := chosenHost.EnterMaintenanceMode(ctx, 0, true, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "creating the maintenance mode task failed")
+	}
+
+	_, err = task.WaitForResult(ctx, s)
+	if err != nil {
+		return nil, errors.Wrap(err, "moving the host into maintenance mode failed")
+	}
+
+	return chosenHost, nil
+}
+
+func canCheckOutHost(ctx context.Context, host *object.HostSystem, finder *find.Finder) (bool, error) {
+	vms, err := finder.VirtualMachineList(ctx, host.InventoryPath+"/*")
+	if err != nil {
+		return false, err
+	}
+
+	for _, vm := range vms {
+		// if any VMs on the host are not a build VM, we shouldn't check out that host
+		if !isBuildVMName(vm.Name()) {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+var buildVMNameRegexp = regexp.MustCompile("^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$")
+
+func isBuildVMName(name string) bool {
+	return buildVMNameRegexp.MatchString(name)
+}
