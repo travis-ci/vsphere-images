@@ -26,6 +26,10 @@ var checkoutHostCommand = cli.Command{
 			Usage:  "Whether the vCenter's certificate chain and hostname should be verified",
 			EnvVar: "VSPHERE_IMAGES_VSPHERE_INSECURE_SKIP_VERIFY",
 		},
+		cli.StringFlag{
+			Name:  "dest-pool",
+			Usage: "Path to cluster where the host will be moved",
+		},
 	},
 }
 
@@ -45,9 +49,14 @@ func checkoutHostAction(c *cli.Context) error {
 		return errors.New("cluster inventory path is required")
 	}
 
+	destinationClusterPath := c.String("dest-pool")
+	if destinationClusterPath == "" {
+		return errors.New("destination cluster path is required")
+	}
+
 	ctx := context.Background()
 	logger := newProgressLogger("Checking out host… ")
-	host, err := vsphereimages.CheckOutHost(ctx, vSphereURL, c.Bool("vsphere-insecure-skip-verify"), clusterInventoryPath, logger)
+	host, err := vsphereimages.CheckOutHost(ctx, vSphereURL, c.Bool("vsphere-insecure-skip-verify"), clusterInventoryPath, destinationClusterPath, logger)
 	if err != nil {
 		return errors.Wrap(err, "checking out host failed")
 	}

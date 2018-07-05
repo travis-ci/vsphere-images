@@ -12,13 +12,22 @@ import (
 	"github.com/vmware/govmomi/vim25/progress"
 )
 
-func CheckOutHost(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureSkipVerify bool, clusterInventoryPath string, s progress.Sinker) (*object.HostSystem, error) {
+func CheckOutHost(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureSkipVerify bool, clusterInventoryPath string, destinationClusterPath string, s progress.Sinker) (*object.HostSystem, error) {
 	client, err := govmomi.NewClient(ctx, vSphereEndpoint, vSphereInsecureSkipVerify)
 	if err != nil {
 		return nil, errors.Wrap(err, "creating vSphere client failed")
 	}
 
 	finder := find.NewFinder(client.Client, false)
+
+	alreadyCheckedOut, err := hasCheckedOutHost(ctx, destinationClusterPath, finder)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not determine if a host was already checked out to destination cluster")
+	}
+
+	if alreadyCheckedOut {
+		return nil, errors.New("a host is already checked out to the cluster at " + destinationClusterPath)
+	}
 
 	hosts, err := finder.HostSystemList(ctx, clusterInventoryPath)
 	if err != nil {
@@ -52,6 +61,15 @@ func CheckOutHost(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecure
 	}
 
 	return chosenHost, nil
+}
+
+func hasCheckedOutHost(ctx context.Context, clusterPath string, finder *find.Finder) (bool, error) {
+	hosts, err := finder.HostSystemList(ctx, clusterPath)
+	if err != nil {
+		return false, err
+	}
+
+	return len(hosts) > 0, nil
 }
 
 func canCheckOutHost(ctx context.Context, host *object.HostSystem, finder *find.Finder) (bool, error) {
