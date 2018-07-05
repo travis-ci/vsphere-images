@@ -2,6 +2,7 @@ package vsphereimages
 
 import (
 	"context"
+	"math"
 	"net/url"
 	"regexp"
 
@@ -38,16 +39,9 @@ func CheckOutHost(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecure
 		return nil, errors.New("no hosts found in cluster")
 	}
 
-	var chosenHost *object.HostSystem
-	for _, host := range hosts {
-		canCheckOut, err := canCheckOutHost(ctx, host, finder)
-		if canCheckOut {
-			chosenHost = host
-		}
-
-		if err != nil {
-			return nil, errors.Wrap(err, "failed determining if host could be checked out")
-		}
+	chosenHost, err := chooseAvailableHost(ctx, hosts, finder)
+	if err != nil {
+		return nil, err
 	}
 
 	task, err := chosenHost.EnterMaintenanceMode(ctx, 0, true, nil)
@@ -98,28 +92,62 @@ func CheckInHost(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureS
 }
 
 func hasCheckedOutHost(ctx context.Context, clusterPath string, finder *find.Finder) (bool, error) {
-	hosts, err := finder.HostSystemList(ctx, clusterPath)
+	_, err := finder.HostSystemList(ctx, clusterPath)
+	if _, ok := err.(*find.NotFoundError); ok {
+		return false, nil
+	}
+
 	if err != nil {
 		return false, err
 	}
 
-	return len(hosts) > 0, nil
+	return true, nil
 }
 
-func canCheckOutHost(ctx context.Context, host *object.HostSystem, finder *find.Finder) (bool, error) {
+func chooseAvailableHost(ctx context.Context, hosts []*object.HostSystem, finder *find.Finder) (*object.HostSystem, error) {
+	var chosenHost *object.HostSystem
+	fewestBuildVMs := math.MaxUint32
+	for _, host := range hosts {
+		nonBuildVMCount, buildVMCount, err := hostVMCounts(ctx, host, finder)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed determining if host could be checked out")
+		}
+
+		if nonBuildVMCount > 0 {
+			continue
+		}
+
+		if buildVMCount < fewestBuildVMs {
+			chosenHost = host
+			fewestBuildVMs = buildVMCount
+
+			if buildVMCount == 0 {
+				break // we don't need to keep looping if we found a host with no VMs on it
+			}
+		}
+	}
+
+	return chosenHost, nil
+}
+
+func hostVMCounts(ctx context.Context, host *object.HostSystem, finder *find.Finder) (nonBuildCount int, buildCount int, err error) {
 	vms, err := finder.VirtualMachineList(ctx, host.InventoryPath+"/*")
 	if err != nil {
-		return false, err
+		return
 	}
 
 	for _, vm := range vms {
 		// if any VMs on the host are not a build VM, we shouldn't check out that host
-		if !isBuildVMName(vm.Name()) {
-			return false, nil
+		isBuildVM := isBuildVMName(vm.Name())
+
+		if isBuildVM {
+			buildCount++
+		} else {
+			nonBuildCount++
 		}
 	}
 
-	return true, nil
+	return
 }
 
 var buildVMNameRegexp = regexp.MustCompile("^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$")
