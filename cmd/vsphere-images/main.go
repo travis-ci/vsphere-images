@@ -15,6 +15,7 @@ func main() {
 	app.Email = "contact+vsphere-images@travis-ci.org"
 
 	app.Commands = []cli.Command{
+		checkinHostCommand,
 		checkoutHostCommand,
 		copyImageCommand,
 		moveImageCommand,
