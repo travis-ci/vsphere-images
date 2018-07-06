@@ -52,7 +52,7 @@ func MoveImage(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureSki
 	return errors.Wrap(err, "moving the VM failed")
 }
 
-func ConfigureImage(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureSkipVerify bool, imageInventoryPath string, config types.VirtualMachineConfigSpec, s progress.Sinker) error {
+func ConfigureImage(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureSkipVerify bool, imageInventoryPath string, config types.VirtualMachineConfigSpec, networkName string, s progress.Sinker) error {
 	client, err := govmomi.NewClient(ctx, vSphereEndpoint, vSphereInsecureSkipVerify)
 	if err != nil {
 		return errors.Wrap(err, "creating vSphere client failed")
@@ -63,6 +63,38 @@ func ConfigureImage(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecu
 	vm, err := finder.VirtualMachine(ctx, imageInventoryPath)
 	if err != nil {
 		return errors.Wrap(err, "finding the VM failed")
+	}
+
+	if networkName != "" {
+		devices, err := vm.Device(ctx)
+		if err != nil {
+			return errors.Wrap(err, "loading VM devices failed")
+		}
+
+		net := devices.Find("ethernet-0")
+		if net == nil {
+			return errors.New("could not find 'ethernet-0' device")
+		}
+
+		network, err := finder.Network(ctx, networkName)
+		if err != nil {
+			return errors.Wrap(err, "finding the network failed")
+		}
+
+		backing, err := network.EthernetCardBackingInfo(ctx)
+		if err != nil {
+			return errors.Wrap(err, "creating network backing info failed")
+		}
+
+		card := net.(types.BaseVirtualEthernetCard).GetVirtualEthernetCard()
+		card.Backing = backing
+
+		config.DeviceChange = []types.BaseVirtualDeviceConfigSpec{
+			&types.VirtualDeviceConfigSpec{
+				Device:    net,
+				Operation: types.VirtualDeviceConfigSpecOperationEdit,
+			},
+		}
 	}
 
 	task, err := vm.Reconfigure(ctx, config)

@@ -38,6 +38,10 @@ var configureImageCommand = cli.Command{
 			Name:  "ram",
 			Usage: "Amount of RAM the machine should have (in MB)",
 		},
+		cli.StringFlag{
+			Name:  "network",
+			Usage: "The name of the network to use",
+		},
 	},
 }
 
@@ -74,9 +78,11 @@ func configureImageAction(c *cli.Context) error {
 		configSpec.MemoryMB = ram
 	}
 
+	network := c.String("network")
+
 	ctx := context.Background()
 	logger := newProgressLogger("Configuring image… ")
-	err = vsphereimages.ConfigureImage(ctx, vSphereURL, c.Bool("vsphere-insecure-skip-verify"), imagePath, configSpec, logger)
+	err = vsphereimages.ConfigureImage(ctx, vSphereURL, c.Bool("vsphere-insecure-skip-verify"), imagePath, configSpec, network, logger)
 	if err != nil {
 		return errors.Wrap(err, "configuring image failed")
 	}
