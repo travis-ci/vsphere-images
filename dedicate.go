@@ -150,6 +150,11 @@ func hostVMCounts(ctx context.Context, host *object.HostSystem, finder *find.Fin
 	return
 }
 
+// build VMs have names that are UUIDs, so this regexp matches a UUID
+//
+// UUIDs are a sequence of groups of hex digits separated by dashes.
+// The count of digits in each group is:
+//    8-4-4-4-12
 var buildVMNameRegexp = regexp.MustCompile("^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$")
 
 func isBuildVMName(name string) bool {
