@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 
 	"github.com/pkg/errors"
 	vsphereimages "github.com/travis-ci/vsphere-images"
@@ -30,6 +31,10 @@ var checkoutHostCommand = cli.Command{
 			Name:  "dest-pool",
 			Usage: "Path to cluster where the host will be moved",
 		},
+		cli.BoolFlag{
+			Name:  "dry-run, n",
+			Usage: "If enabled, only checks if a host is checked out to the destination cluster",
+		},
 	},
 }
 
@@ -44,29 +49,46 @@ func checkoutHostAction(c *cli.Context) error {
 		return errors.Wrap(err, "parsing vSphere URL failed")
 	}
 
-	clusterInventoryPath := c.Args().Get(0)
-	if clusterInventoryPath == "" {
-		return errors.New("cluster inventory path is required")
-	}
-
 	destinationClusterPath := c.String("dest-pool")
 	if destinationClusterPath == "" {
 		return errors.New("destination cluster path is required")
 	}
 
-	ctx := context.Background()
-	logger := newProgressLogger("Checking out host… ")
-	host, err := vsphereimages.CheckOutHost(ctx, vSphereURL, c.Bool("vsphere-insecure-skip-verify"), clusterInventoryPath, destinationClusterPath, logger)
-	if err != nil {
-		return errors.Wrap(err, "checking out host failed")
-	}
-	logger.Wait()
+	dryRun := c.Bool("dry-run")
 
-	if host == nil {
-		fmt.Println("No suitable host to check out was found")
+	ctx := context.Background()
+
+	if dryRun {
+		checkedOut, err := vsphereimages.IsHostCheckedOut(ctx, vSphereURL, c.Bool("vsphere-insecure-skip-verify"), destinationClusterPath)
+		if err != nil {
+			return errors.Wrap(err, "finding checked out host failed")
+		}
+
+		if checkedOut {
+			return nil
+		}
+
+		// report a non-zero exit code to indicate there is no checked out host
+		os.Exit(1)
 	} else {
-		fmt.Println("Checked out host", host.Name())
-		fmt.Println("Please move it to the desired cluster manually using the vCenter client.")
+		clusterInventoryPath := c.Args().Get(0)
+		if clusterInventoryPath == "" {
+			return errors.New("cluster inventory path is required")
+		}
+
+		logger := newProgressLogger("Checking out host… ")
+		host, err := vsphereimages.CheckOutHost(ctx, vSphereURL, c.Bool("vsphere-insecure-skip-verify"), clusterInventoryPath, destinationClusterPath, logger)
+		if err != nil {
+			return errors.Wrap(err, "checking out host failed")
+		}
+		logger.Wait()
+
+		if host == nil {
+			fmt.Println("No suitable host to check out was found")
+		} else {
+			fmt.Println("Checked out host", host.Name())
+			fmt.Println("Please move it to the desired cluster manually using the vCenter client.")
+		}
 	}
 
 	return nil
