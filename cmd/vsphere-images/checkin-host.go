@@ -28,7 +28,7 @@ var checkinHostCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:  "dest-pool",
-			Usage: "Path to cluster where the host will be moved (currently unused)",
+			Usage: "Path to cluster where the host will be moved",
 		},
 	},
 }
@@ -63,7 +63,6 @@ func checkinHostAction(c *cli.Context) error {
 	logger.Wait()
 
 	fmt.Println("Checked in host", host.Name())
-	fmt.Println("Please move it to the desired cluster manually using the vCenter client.")
 
 	return nil
 }
