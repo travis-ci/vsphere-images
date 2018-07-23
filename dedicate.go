@@ -16,6 +16,22 @@ import (
 	"github.com/vmware/govmomi/vim25/types"
 )
 
+func IsHostCheckedOut(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureSkipVerify bool, destinationClusterPath string) (bool, error) {
+	client, err := govmomi.NewClient(ctx, vSphereEndpoint, vSphereInsecureSkipVerify)
+	if err != nil {
+		return false, errors.Wrap(err, "creating vSphere client failed")
+	}
+
+	finder := find.NewFinder(client.Client, false)
+
+	alreadyCheckedOut, err := hasCheckedOutHost(ctx, destinationClusterPath, finder)
+	if err != nil {
+		return false, errors.Wrap(err, "could not determine if a host was already checked out to destination cluster")
+	}
+
+	return alreadyCheckedOut, nil
+}
+
 func CheckOutHost(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureSkipVerify bool, clusterInventoryPath string, destinationClusterPath string, s progress.Sinker) (*object.HostSystem, error) {
 	client, err := govmomi.NewClient(ctx, vSphereEndpoint, vSphereInsecureSkipVerify)
 	if err != nil {
