@@ -66,7 +66,6 @@ func checkoutHostAction(c *cli.Context) error {
 		fmt.Println("No suitable host to check out was found")
 	} else {
 		fmt.Println("Checked out host", host.Name())
-		fmt.Println("Please move it to the desired cluster manually using the vCenter client.")
 	}
 
 	return nil
