@@ -10,10 +10,8 @@ import (
 	"github.com/vmware/govmomi"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
-	"github.com/vmware/govmomi/vim25/methods"
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/progress"
-	"github.com/vmware/govmomi/vim25/types"
 )
 
 func IsHostCheckedOut(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureSkipVerify bool, destinationClusterPath string) (bool, error) {
@@ -86,7 +84,7 @@ func CheckOutHost(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecure
 		}
 	}
 
-	task, err := moveHostToCluster(ctx, chosenHost, cluster)
+	task, err := cluster.MoveInto(ctx, chosenHost)
 	if err != nil {
 		return nil, errors.Wrap(err, "creating the move host task failed")
 	}
@@ -153,7 +151,7 @@ func CheckInHost(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureS
 		}
 	}
 
-	task, err := moveHostToCluster(ctx, hosts[0], cluster)
+	task, err := cluster.MoveInto(ctx, hosts[0])
 	if err != nil {
 		return nil, errors.Wrap(err, "creating the move host task failed")
 	}
@@ -255,24 +253,4 @@ func isHostInMaintenanceMode(ctx context.Context, host *object.HostSystem) (bool
 		return false, err
 	}
 	return mh.Runtime.InMaintenanceMode, nil
-}
-
-func moveHostToCluster(ctx context.Context, host *object.HostSystem, destinationCluster *object.ClusterComputeResource) (*object.Task, error) {
-	// The structure of this method is largely copied from existing methods from the 'object' package in govmomi.
-	// The pattern of creating a task, then calling the 'methods' version of it, and returning a new task wrapping
-	// the result is how other real APIs on govmomi objects are done.
-	//
-	// There isn't a function on ClusterComputeResource to run this task, though, so we have to do this part ourselves.
-
-	req := types.MoveInto_Task{
-		This: destinationCluster.Reference(),
-		Host: []types.ManagedObjectReference{host.Reference()},
-	}
-
-	res, err := methods.MoveInto_Task(ctx, destinationCluster.Client(), &req)
-	if err != nil {
-		return nil, err
-	}
-
-	return object.NewTask(destinationCluster.Client(), res.Returnval), nil
 }
