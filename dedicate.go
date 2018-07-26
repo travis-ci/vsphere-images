@@ -66,6 +66,10 @@ func CheckOutHost(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecure
 		return nil, err
 	}
 
+	if chosenHost == nil {
+		return nil, errors.New("no hosts available with only build VMs running")
+	}
+
 	inMaintenanceMode, err := isHostInMaintenanceMode(ctx, chosenHost)
 	if err != nil {
 		return nil, errors.Wrap(err, "checking if host is in maintenance mode already failed")

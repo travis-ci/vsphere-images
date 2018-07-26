@@ -89,6 +89,7 @@ type SimulatedService struct {
 func StartService() (*SimulatedService, error) {
 	model := simulator.VPX()
 	model.Machine = 4
+	model.ClusterHost = 6
 	if err := model.Create(); err != nil {
 		return nil, err
 	}
