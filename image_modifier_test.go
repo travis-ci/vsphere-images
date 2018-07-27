@@ -4,9 +4,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-
-	"github.com/vmware/govmomi"
-	"github.com/vmware/govmomi/find"
 )
 
 func TestMoveImageTopLevel(t *testing.T) {
@@ -102,12 +99,10 @@ func TestMoveImageWithoutRename(t *testing.T) {
 }
 
 func createFolder(ctx context.Context, service *SimulatedService, location string, name string) error {
-	client, err := govmomi.NewClient(ctx, service.URL(), false)
+	finder, err := service.NewFinder(ctx)
 	if err != nil {
 		return err
 	}
-
-	finder := find.NewFinder(client.Client, false)
 
 	folder, err := finder.Folder(ctx, location)
 	if err != nil {

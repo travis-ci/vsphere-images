@@ -1,9 +1,12 @@
 package vsphereimages
 
 import (
+	"context"
 	"net/url"
 	"sync"
 
+	"github.com/vmware/govmomi"
+	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/simulator"
 	"github.com/vmware/govmomi/vim25/progress"
 )
@@ -109,4 +112,17 @@ func (service *SimulatedService) Stop() {
 
 func (service *SimulatedService) URL() *url.URL {
 	return service.Server.URL
+}
+
+func (service *SimulatedService) NewClient(ctx context.Context) (*govmomi.Client, error) {
+	return govmomi.NewClient(ctx, service.URL(), false)
+}
+
+func (service *SimulatedService) NewFinder(ctx context.Context) (*find.Finder, error) {
+	client, err := service.NewClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return find.NewFinder(client.Client, false), nil
 }

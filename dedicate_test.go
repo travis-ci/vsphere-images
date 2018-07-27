@@ -2,10 +2,9 @@ package vsphereimages
 
 import (
 	"context"
-	"github.com/vmware/govmomi"
-	"github.com/vmware/govmomi/find"
-	"github.com/vmware/govmomi/vim25/types"
 	"testing"
+
+	"github.com/vmware/govmomi/vim25/types"
 )
 
 func TestIsHostCheckedOut(t *testing.T) {
@@ -66,12 +65,10 @@ func TestIsHostCheckedOutEmptyCluster(t *testing.T) {
 // }
 
 func createCluster(ctx context.Context, service *SimulatedService, location string, name string) error {
-	client, err := govmomi.NewClient(ctx, service.URL(), false)
+	finder, err := service.NewFinder(ctx)
 	if err != nil {
 		return err
 	}
-
-	finder := find.NewFinder(client.Client, false)
 
 	folder, err := finder.Folder(ctx, location)
 	if err != nil {
