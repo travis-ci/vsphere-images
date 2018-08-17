@@ -30,6 +30,98 @@ func IsHostCheckedOut(ctx context.Context, vSphereEndpoint *url.URL, vSphereInse
 	return alreadyCheckedOut, nil
 }
 
+func SelectAvailableHost(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureSkipVerify bool, clusterInventoryPath string) (*object.HostSystem, error) {
+	client, err := govmomi.NewClient(ctx, vSphereEndpoint, vSphereInsecureSkipVerify)
+	if err != nil {
+		return nil, errors.Wrap(err, "creating vSphere client failed")
+	}
+
+	finder := find.NewFinder(client.Client, false)
+
+	hosts, err := finder.HostSystemList(ctx, clusterInventoryPath)
+	if err != nil {
+		return nil, errors.Wrap(err, "finding hosts for cluster failed")
+	}
+
+	if len(hosts) < 1 {
+		return nil, errors.New("no hosts found in cluster")
+	}
+
+	chosenHost, err := chooseAvailableHost(ctx, hosts, finder)
+	if err != nil {
+		return nil, err
+	}
+
+	if chosenHost == nil {
+		return nil, errors.New("no hosts available with only build VMs running")
+	}
+
+	return chosenHost, err
+}
+
+func CheckOutSelectedHost(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureSkipVerify bool, host *object.HostSystem, destinationClusterPath string, s progress.Sinker) error {
+	client, err := govmomi.NewClient(ctx, vSphereEndpoint, vSphereInsecureSkipVerify)
+	if err != nil {
+		return errors.Wrap(err, "creating vSphere client failed")
+	}
+
+	finder := find.NewFinder(client.Client, false)
+
+	alreadyCheckedOut, err := hasCheckedOutHost(ctx, destinationClusterPath, finder)
+	if err != nil {
+		return errors.Wrap(err, "could not determine if a host was already checked out to destination cluster")
+	}
+
+	if alreadyCheckedOut {
+		return errors.New("a host is already checked out to the cluster at " + destinationClusterPath)
+	}
+
+	cluster, err := finder.ClusterComputeResource(ctx, destinationClusterPath)
+	if err != nil {
+		return errors.Wrap(err, "finding the destination cluster failed")
+	}
+
+	inMaintenanceMode, err := isHostInMaintenanceMode(ctx, host)
+	if err != nil {
+		return errors.Wrap(err, "checking if host is in maintenance mode already failed")
+	}
+
+	// if the host is already in maintenance mode, skip this but still do the remaining work
+	if !inMaintenanceMode {
+		task, err := host.EnterMaintenanceMode(ctx, 0, true, nil)
+		if err != nil {
+			return errors.Wrap(err, "creating the enter maintenance mode task failed")
+		}
+
+		_, err = task.WaitForResult(ctx, s)
+		if err != nil {
+			return errors.Wrap(err, "moving the host into maintenance mode failed")
+		}
+	}
+
+	task, err := cluster.MoveInto(ctx, host)
+	if err != nil {
+		return errors.Wrap(err, "creating the move host task failed")
+	}
+
+	_, err = task.WaitForResult(ctx, s)
+	if err != nil {
+		return errors.Wrap(err, "moving host to destination cluster failed")
+	}
+
+	task, err = host.ExitMaintenanceMode(ctx, 0)
+	if err != nil {
+		return errors.Wrap(err, "creating the exit maintenance mode task failed")
+	}
+
+	_, err = task.WaitForResult(ctx, s)
+	if err != nil {
+		return errors.Wrap(err, "bringing the host out of maintenance mode failed")
+	}
+
+	return nil
+}
+
 func CheckOutHost(ctx context.Context, vSphereEndpoint *url.URL, vSphereInsecureSkipVerify bool, clusterInventoryPath string, destinationClusterPath string, s progress.Sinker) (*object.HostSystem, error) {
 	client, err := govmomi.NewClient(ctx, vSphereEndpoint, vSphereInsecureSkipVerify)
 	if err != nil {
