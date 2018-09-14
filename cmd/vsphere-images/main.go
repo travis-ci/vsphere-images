@@ -23,6 +23,7 @@ func main() {
 		migrateImageCommand,
 		resnapshotCommand,
 		datastoreMoveCommand,
+		restoreBackupCommand,
 	}
 
 	err := app.Run(os.Args)
